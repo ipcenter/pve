@@ -19,11 +19,17 @@ chmod +x /root/backup-pve-host.sh
 
 ```
 apt install proxmox-backup-client -y
+```
 
+```
 proxmox-backup-client restore etc.pxar   latest /etc   --allow-existing-dirs --repository root@pam@192.168.1.16:pve-config
 proxmox-backup-client restore root.pxar  latest /      --allow-existing-dirs --repository ...
 proxmox-backup-client restore pkglist.pxar latest /root/dpkg-selections.txt --repository ...
 dpkg --set-selections < /root/dpkg-selections.txt && apt-get dselect-upgrade
+```
 
-reboot   # 必须重启才能让新配置全部生效
+# 必须重启才能让新配置全部生效
+
+```
+reboot   
 ```
