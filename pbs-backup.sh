@@ -30,13 +30,12 @@ proxmox-backup-client backup root.pxar:/ \
   --exclude='/mnt/**' \
   --exclude='/media/**' \
   --exclude='/var/lib/vz/**'      # ← 双保险：强制排除虚拟机镜像目录（client 本身也会自动跳过大文件）
-  --exclude='/var/cache/apt/archives/**'   # 可选：排除 apt 缓存，进一步减小体积
 
 # 第三段：备份当前安装的所有软件包列表（重装系统后 10 秒就能恢复软件环境）
 # 体积只有几 KB
 dpkg --get-selections > /root/dpkg-selections.txt
 proxmox-backup-client backup pkglist.pxar:/root/dpkg-selections.txt \
-  --repository "$PBS_REPO"
+  --repository "$PBS_REPO" -f
 
 # ====================== 可选：每天自动清理无用缓存，进一步减小增量 ======================
 # 这几行可以让 root.pxar 体积再降 3~8 GB，且每天增量更小
@@ -46,3 +45,4 @@ find /var/log -type f \( -name "*.log.*" -o -name "*.old" \) -delete 2>/dev/null
 # =====================================================================================
 
 echo "[$(date)] PVE 宿主机三件套备份完成 → $HOSTNAME" >> /var/log/pve-host-backup.log
+
