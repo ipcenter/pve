@@ -148,7 +148,7 @@ EOF
 # -------------- 5. 生成 pve-no-subscription.sources （正确新格式！）--------------
 cat > "$SOURCES_D/pve-no-subscription.sources" <<EOF
 Types: deb
-URIs: http://$DOMAIN/proxmox/debian/pve
+URIs: https://mirrors.nju.edu.cn/proxmox/debian/pve
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
