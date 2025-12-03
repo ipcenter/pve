@@ -118,7 +118,8 @@ check_new_hostname() {
     return 0
 }
 
-# 安全更新hosts文件 - 修复版本
+
+# 安全更新hosts文件
 update_hosts_file() {
     local original_hostname="$1"
     local new_hostname="$2"
@@ -140,6 +141,12 @@ update_hosts_file() {
         log_info "已替换中间的主机名引用"
     fi
     
+    # 额外处理 pve.xyhome.com 域名替换
+    if grep -q "$original_hostname.xyhome.com" /etc/hosts; then
+        sed -i "s/$original_hostname.xyhome.com/$new_hostname.xyhome.com/g" /etc/hosts
+        log_info "已替换 pve.xyhome.com 域名引用"
+    fi
+    
     # 验证更新
     if grep -q "$new_hostname" /etc/hosts; then
         log_info "/etc/hosts 文件更新成功"
@@ -148,6 +155,7 @@ update_hosts_file() {
         log_warn "/etc/hosts 文件中未找到原主机名的精确匹配"
     fi
 }
+
 
 # 安全迁移PVE节点配置目录 - 关键修复
 # 迁移PVE节点配置目录 - 改进版
