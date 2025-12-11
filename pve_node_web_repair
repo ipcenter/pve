@@ -1,0 +1,116 @@
+#!/bin/bash
+# =========================================================
+# Proxmox VE Web UI TLS 一键修复脚本
+# 适用场景：pveproxy 正常，但 HTTPS 8006 TLS 握手失败
+# 作者思路：基于真实故障修复流程抽象
+# =========================================================
+
+set -euo pipefail
+
+LOG="/root/pve_webui_tls_repair.log"
+exec > >(tee -a "$LOG") 2>&1
+
+echo "=================================================="
+echo " PVE Web UI TLS 自愈修复脚本"
+echo " 主机: $(hostname)"
+echo " 时间: $(date)"
+echo "=================================================="
+
+### 1. 基础安全检查 ######################################
+
+echo -e "\n[1/6] 基础环境检查"
+
+for svc in pveproxy pvedaemon pvestatd pve-cluster; do
+    if ! systemctl is-active --quiet "$svc"; then
+        echo "❌ 服务 $svc 未运行，拒绝执行修复"
+        exit 1
+    fi
+done
+echo "✅ 核心服务运行正常"
+
+if ! mountpoint -q /etc/pve; then
+    echo "❌ /etc/pve 未挂载（pmxcfs 异常），拒绝执行"
+    exit 1
+fi
+echo "✅ /etc/pve 挂载正常"
+
+### 2. TLS 握手检测 ######################################
+
+echo -e "\n[2/6] TLS 握手健康检测"
+
+if openssl s_client -connect 127.0.0.1:8006 -servername "$(hostname)" \
+    </dev/null 2>/dev/null | grep -q "BEGIN CERTIFICATE"; then
+    echo "✅ TLS 握手正常，当前无需修复"
+    exit 0
+fi
+
+echo "⚠️ TLS 握手失败，进入修复流程"
+
+### 3. 主机名一致性校验 ##################################
+
+echo -e "\n[3/6] 主机名一致性校验"
+
+HN1="$(hostname)"
+HN2="$(cat /etc/hostname)"
+NODE_DIR="/etc/pve/nodes/$HN1"
+
+if [[ "$HN1" != "$HN2" ]]; then
+    echo "❌ hostname 与 /etc/hostname 不一致"
+    echo " hostname: $HN1"
+    echo " /etc/hostname: $HN2"
+    exit 1
+fi
+
+if [[ ! -d "$NODE_DIR" ]]; then
+    echo "❌ /etc/pve/nodes/$HN1 不存在"
+    exit 1
+fi
+
+grep -q "$HN1" /etc/hosts || {
+    echo "❌ /etc/hosts 未包含主机名 $HN1"
+    exit 1
+}
+
+echo "✅ 主机名一致性校验通过"
+
+### 4. 备份并清理旧证书 ###############################
+
+echo -e "\n[4/6] 备份并清理旧 TLS 证书"
+
+BACKUP_DIR="/root/pve-ssl-backup-$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+if ls /etc/pve/local/pve-ssl.* &>/dev/null; then
+    mv /etc/pve/local/pve-ssl.* "$BACKUP_DIR/"
+    echo "✅ 旧证书已备份至 $BACKUP_DIR"
+else
+    echo "⚠️ 未发现旧证书文件"
+fi
+
+### 5. 强制重建证书 #####################################
+
+echo -e "\n[5/6] 强制重建 PVE TLS 证书"
+
+systemctl stop pveproxy
+pvecm updatecerts --force
+systemctl start pveproxy
+
+sleep 2
+
+### 6. 修复结果验证 #####################################
+
+echo -e "\n[6/6] 修复结果验证"
+
+if openssl s_client -connect 127.0.0.1:8006 -servername "$HN1" \
+    </dev/null 2>/dev/null | grep -q "BEGIN CERTIFICATE"; then
+    echo "✅ TLS 修复成功，Web UI 已恢复"
+    echo "👉 https://$HN1:8006"
+else
+    echo "❌ 修复失败，请人工介入"
+    echo "日志文件：$LOG"
+    exit 2
+fi
+
+echo "=================================================="
+echo " 修复流程完成"
+echo "=================================================="
